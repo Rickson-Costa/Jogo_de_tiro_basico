@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jogo: Batalha Contra o Câncer</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #1a1a1a;
+            font-family: Arial, sans-serif;
+        }
+        #gameContainer {
+            position: relative;
+            width: 400px;
+            height: 650px;
+            background-color: #000;
+        }
+        canvas {
+            border: 2px solid #fff;
+        }
+        #topDisplay, #bottomDisplay {
+            position: absolute;
+            left: 0;
+            right: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            font-size: 24px;
+            font-weight: bold;
+            height: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #topDisplay { top: 0; }
+        #bottomDisplay { bottom: 0; }
+        #livesDisplay { color: #ff4444; }
+        #gameOverScreen, #rankingScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 24px;
+        }
+        #rankingScreen { display: none; }
+        input { margin: 10px 0; padding: 5px; }
+        button { margin: 10px; padding: 5px 10px; }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="topDisplay">
+            <span id="livesDisplay">Vidas: 3</span>
+        </div>
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+        <div id="bottomDisplay">
+            <span id="scoreDisplay">Score: 0</span>
+            <span id="timerDisplay">Tempo: 0s</span>
+        </div>
+        <div id="gameOverScreen" style="display: none;">
+            <h2>Game Over</h2>
+            <p id="finalScore"></p>
+            <button id="showRankingBtn">Ver Ranking</button>
+            <button id="restartBtn">Reiniciar</button>
+        </div>
+        <div id="rankingScreen">
+            <h2>Top 5 Jogadores</h2>
+            <ol id="rankingList"></ol>
+            <div id="nameInput" style="display: none;">
+                <input type="text" id="playerName" placeholder="Seu nome">
+                <button id="submitName">Enviar</button>
+            </div>
+            <button id="closeRankingBtn">Fechar</button>
+        </div>
+    </div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const timerDisplay = document.getElementById('timerDisplay');
+        const livesDisplay = document.getElementById('livesDisplay');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const rankingScreen = document.getElementById('rankingScreen');
+        const finalScore = document.getElementById('finalScore');
+        const rankingList = document.getElementById('rankingList');
+        const nameInput = document.getElementById('nameInput');
+        const playerNameInput = document.getElementById('playerName');
+
+        let score = 0;
+        let lives = 3;
+        let startTime = Date.now();
+        let gameOver = false;
+        let ranking = [];
+
+        // Carregando imagens
+        const playerImg = new Image();
+        playerImg.src = 'medico.png'
+
+        const enemyImgs = [
+            'cigarro.png',
+            'cancer.png',
+            'hamburguer.png',
+	    'coca-cola.png',
+        ];
+
+        // Jogador
+        const player = {
+            x: canvas.width / 2,
+            y: canvas.height - 30,
+            width: 40,
+            height: 40,
+            speed: 5
+        };
+
+        // Inimigos
+        const enemies = [];
+        const bullets = [];
+
+        function drawPlayer() {
+            ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
+        }
+
+        function drawEnemies() {
+            for (let i = 0; i < enemies.length; i++) {
+                const enemy = enemies[i];
+                const img = new Image();
+                img.src = enemyImgs[enemy.type];
+                ctx.drawImage(img, enemy.x, enemy.y, enemy.width, enemy.height);
+            }
+        }
+
+        function drawBullets() {
+            ctx.fillStyle = 'yellow';
+            for (let i = 0; i < bullets.length; i++) {
+                const bullet = bullets[i];
+                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+            }
+        }
+
+        function updateGame() {
+            if (gameOver) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            drawPlayer();
+            drawEnemies();
+            drawBullets();
+
+            // Atualiza posições dos inimigos
+            for (let i = 0; i < enemies.length; i++) {
+                const enemy = enemies[i];
+                enemy.y += enemy.speed;
+
+                // Checa colisão com o jogador
+                if (enemy.y + enemy.height >= player.y && enemy.x < player.x + player.width && enemy.x + enemy.width > player.x) {
+                    lives--;
+                    livesDisplay.textContent = `Vidas: ${lives}`;
+                    enemies.splice(i, 1);
+                    i--;
+                    if (lives <= 0) {
+                        gameOver = true;
+                        finalScore.textContent = `Sua pontuação: ${score}`;
+                        gameOverScreen.style.display = 'flex';
+                    }
+                }
+
+                // Remover inimigos fora da tela
+                if (enemy.y > canvas.height) {
+                    enemies.splice(i, 1);
+                    i--;
+                }
+            }
+
+            // Atualiza posições das balas
+            for (let i = 0; i < bullets.length; i++) {
+                const bullet = bullets[i];
+                bullet.y -= bullet.speed;
+
+                // Checa colisão com inimigos
+                for (let j = 0; j < enemies.length; j++) {
+                    const enemy = enemies[j];
+                    if (bullet.y <= enemy.y + enemy.height && bullet.x < enemy.x + enemy.width && bullet.x + bullet.width > enemy.x) {
+                        score += 10;
+                        scoreDisplay.textContent = `Score: ${score}`;
+                        enemies.splice(j, 1);
+                        bullets.splice(i, 1);
+                        i--;
+                        break;
+                    }
+                }
+
+                // Remove balas fora da tela
+                if (bullet.y < 0) {
+                    bullets.splice(i, 1);
+                    i--;
+                }
+            }
+
+            if (!gameOver) requestAnimationFrame(updateGame);
+        }
+
+        function createEnemy() {
+            if (gameOver) return;
+
+            const size = player.width;  // Definindo o tamanho dos inimigos igual ao do jogador
+            const x = Math.random() * (canvas.width - size);
+            const type = Math.floor(Math.random() * enemyImgs.length);
+
+            enemies.push({
+                x: x,
+                y: -size,
+                width: size,
+                height: size,
+                speed: Math.random() * 1 + 2,
+                type: type
+            });
+
+            setTimeout(createEnemy, 1000 - score * 2);
+        }
+
+        function shootBullet() {
+            bullets.push({
+                x: player.x + player.width / 2 - 2.5,
+                y: player.y,
+                width: 5,
+                height: 10,
+                speed: 7
+            });
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' && player.x > 0) player.x -= player.speed;
+            if (e.key === 'ArrowRight' && player.x + player.width < canvas.width) player.x += player.speed;
+            if (e.key === ' ') shootBullet();
+        });
+
+        function startGame() {
+            score = 0;
+            lives = 3;
+            startTime = Date.now();
+            gameOver = false;
+            enemies.length = 0;
+            bullets.length = 0;
+            livesDisplay.textContent = `Vidas: ${lives}`;
+            scoreDisplay.textContent = `Score: ${score}`;
+            gameOverScreen.style.display = 'none';
+            nameInput.style.display = 'none';
+            updateGame();
+            createEnemy();
+            updateTimer();
+        }
+
+        function updateTimer() {
+            if (gameOver) return;
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            timerDisplay.textContent = `Tempo: ${elapsed}s`;
+            if (!gameOver) setTimeout(updateTimer, 1000);
+        }
+
+        function updateRanking() {
+            rankingList.innerHTML = '';
+            ranking.forEach((entry, index) => {
+                const li = document.createElement('li');
+                li.textContent = `${index + 1}. ${entry.name} - ${entry.score}`;
+                rankingList.appendChild(li);
+            });
+        }
+
+        function saveScore() {
+            const playerName = playerNameInput.value.trim();
+            if (playerName) {
+                ranking.push({ name: playerName, score });
+                ranking.sort((a, b) => b.score - a.score);
+                if (ranking.length > 5) ranking.pop();
+                updateRanking();
+                nameInput.style.display = 'none';
+                rankingScreen.style.display = 'block';
+            }
+        }
+
+        document.getElementById('restartBtn').addEventListener('click', startGame);
+        document.getElementById('showRankingBtn').addEventListener('click', () => {
+            nameInput.style.display = 'block';
+        });
+        document.getElementById('submitName').addEventListener('click', saveScore);
+        document.getElementById('closeRankingBtn').addEventListener('click', () => {
+            rankingScreen.style.display = 'none';
+        });
+
+        startGame();
+    </script>
+</body>
+</html>
